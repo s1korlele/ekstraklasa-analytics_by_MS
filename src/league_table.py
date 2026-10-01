@@ -109,6 +109,34 @@ def create_h2h_table(season_df, teams):
 
     return pd.DataFrame(records)
 
+def h2h_matches_complete(season_df, teams):
+    """
+    Sprawdza, czy wszystkie zainteresowane drużyny
+    rozegrały między sobą komplet spotkań.
+
+    W obecnym formacie Ekstraklasy każda para
+    powinna rozegrać 2 mecze.
+    """
+
+    for i, team_a in enumerate(teams):
+        for team_b in teams[i + 1:]:
+
+            matches = season_df[
+                (
+                    (season_df["home_team"] == team_a)
+                    & (season_df["away_team"] == team_b)
+                )
+                |
+                (
+                    (season_df["home_team"] == team_b)
+                    & (season_df["away_team"] == team_a)
+                )
+            ]
+
+            if len(matches) < 2:
+                return False
+
+    return True
 
 def sort_tied_group(group, season_df):
     """
@@ -118,34 +146,51 @@ def sort_tied_group(group, season_df):
 
     teams = group["team"].tolist()
 
-    h2h = create_h2h_table(
+    # H2H stosujemy tylko wtedy, gdy wszystkie zainteresowane drużyny rozegrały między sobą komplet zaplanowanych spotkań.
+    use_h2h = h2h_matches_complete(
         season_df,
         teams
     )
 
-    group = group.merge(
-        h2h,
-        on="team",
-        how="left"
-    )
+    if use_h2h:
 
-    # Przy dwóch drużynach regulamin nie używa liczby goli H2H jako osobnego kryterium.
-    if len(group) == 2:
-        sort_columns = [
-            "h2h_points",
-            "h2h_goal_difference",
-            "goal_difference",
-            "goals_for",
-            "wins",
-            "away_wins",
-        ]
+        h2h = create_h2h_table(
+            season_df,
+            teams
+        )
 
-    # Przy 3+ drużynach wykorzystujemy mini-tabelę, w tym gole zdobyte H2H.
+        group = group.merge(
+            h2h,
+            on="team",
+            how="left"
+        )
+
+        if len(group) == 2:
+            sort_columns = [
+                "h2h_points",
+                "h2h_goal_difference",
+                "goal_difference",
+                "goals_for",
+                "wins",
+                "away_wins",
+            ]
+
+        else:
+            sort_columns = [
+                "h2h_points",
+                "h2h_goal_difference",
+                "h2h_goals_for",
+                "goal_difference",
+                "goals_for",
+                "wins",
+                "away_wins",
+            ]
+
     else:
+
+        # Nie rozegrano kompletu bezpośrednich spotkań.
+        # Pomijamy H2H.
         sort_columns = [
-            "h2h_points",
-            "h2h_goal_difference",
-            "h2h_goals_for",
             "goal_difference",
             "goals_for",
             "wins",
@@ -166,6 +211,11 @@ def create_league_table(df, season):
 
     table = create_base_table(season_df)
 
+    season_complete = (
+    len(table) == 18
+    and table["matches"].eq(34).all()
+)
+
     sorted_groups = []
 
     # Najpierw punkty całego sezonu.
@@ -179,10 +229,27 @@ def create_league_table(df, season):
         ].copy()
 
         if len(group) > 1:
-            group = sort_tied_group(
-                group,
-                season_df
-            )
+
+            if season_complete:
+                # Zakończony sezon:
+                # stosujemy bezpośrednie mecze (H2H)
+                group = sort_tied_group(
+                    group,
+                    season_df
+                )
+
+            else:
+                # Sezon w trakcie:
+                # najpierw ogólny bilans bramek
+                group = group.sort_values(
+                    by=[
+                        "goal_difference",
+                        "goals_for",
+                        "wins",
+                        "away_wins",
+                    ],
+                    ascending=False
+                )
 
         sorted_groups.append(group)
 
