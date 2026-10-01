@@ -46,8 +46,28 @@ df["date"] = pd.to_datetime(
     format="%d/%m/%Y"
 )
 
+# 5. Punkty zdobyte przez gospodarzy i gości
+df["home_points"] = df["result"].map({
+    "H": 3,
+    "D": 1,
+    "A": 0
+})
 
-# 5. Zapis przetworzonych danych
+df["away_points"] = df["result"].map({
+    "H": 0,
+    "D": 1,
+    "A": 3
+})
+
+
+# 6. Dodatkowe statystyki meczu
+df["total_goals"] = df["home_goals"] + df["away_goals"]
+
+df["goal_difference"] = (
+    df["home_goals"] - df["away_goals"]
+)
+
+# 7. Zapis przetworzonych danych
 df.to_csv(PROCESSED_DATA_PATH, index=False)
 
 
