@@ -6,13 +6,16 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "matches.csv"
 
 
-def create_base_table(season_df):
+def create_base_table(season_df, all_teams=None):
     """Tworzy podstawowe statystyki wszystkich drużyn w sezonie."""
 
-    teams = sorted(
-        set(season_df["home_team"]) |
-        set(season_df["away_team"])
-    )
+    if all_teams is None:
+        teams = sorted(
+            set(season_df["home_team"]) |
+            set(season_df["away_team"])
+        )
+    else:
+        teams = sorted(all_teams)
 
     table = []
 
@@ -203,13 +206,16 @@ def sort_tied_group(group, season_df):
     )
 
 
-def create_league_table(df, season):
+def create_league_table(df, season, all_teams=None):
 
     season_df = df[
         df["season"] == season
     ].copy()
 
-    table = create_base_table(season_df)
+    table = create_base_table(
+        season_df,
+        all_teams=all_teams
+    )
 
     season_complete = (
     len(table) == 18
@@ -281,20 +287,88 @@ def create_league_table(df, season):
 
     return table
 
+def create_team_progress(df, season, team):
+    """
+    Tworzy historię pozycji drużyny po każdym jej rozegranym meczu.
+    """
 
-if __name__ == "__main__":
+    season_df = df[
+        df["season"] == season
+    ].copy()
 
-    df = pd.read_csv(DATA_PATH)
-
-    table = create_league_table(
-        df,
-        season="2024/2025"
+    all_teams = sorted(
+        set(season_df["home_team"]) |
+        set(season_df["away_team"])
     )
 
-    print("\n=== EKSTRAKLASA 2024/2025 ===\n")
+    team_matches = season_df[
+        (season_df["home_team"] == team)
+        | (season_df["away_team"] == team)
+    ].copy()
 
-    print(
-        table.to_string(
-            index=False
+    team_matches = team_matches.sort_values(
+        by=["date", "time"]
+    ).reset_index(drop=True)
+
+    progress = []
+
+    for match_number, (_, match) in enumerate(
+        team_matches.iterrows(),
+        start=1
+    ):
+        # Wszystkie mecze ligi rozegrane do dnia
+        # danego spotkania włącznie
+        matches_so_far = season_df[
+            season_df["date"] <= match["date"]
+        ].copy()
+
+        # Tabela ligowa w danym momencie sezonu
+        table = create_league_table(
+            matches_so_far,
+            season,
+            all_teams=all_teams
         )
-    )
+
+        team_row = table[
+            table["team"] == team
+        ]
+
+        if team_row.empty:
+            continue
+
+        team_row = team_row.iloc[0]
+
+        # Informacje o konkretnym meczu
+        if match["home_team"] == team:
+            opponent = match["away_team"]
+            venue = "Dom"
+            goals_for = int(match["home_goals"])
+            goals_against = int(match["away_goals"])
+            points = int(match["home_points"])
+        else:
+            opponent = match["home_team"]
+            venue = "Wyjazd"
+            goals_for = int(match["away_goals"])
+            goals_against = int(match["home_goals"])
+            points = int(match["away_points"])
+
+        if points == 3:
+            result = "W"
+        elif points == 1:
+            result = "R"
+        else:
+            result = "L"
+
+        progress.append({
+            "match_number": match_number,
+            "date": match["date"],
+            "opponent": opponent,
+            "venue": venue,
+            "score": f"{goals_for}:{goals_against}",
+            "result": result,
+            "points": points,
+            "cumulative_points": int(team_row["points"]),
+            "position": int(team_row["position"]),
+        })
+
+    return pd.DataFrame(progress)

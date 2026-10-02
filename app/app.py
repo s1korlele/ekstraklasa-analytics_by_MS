@@ -3,6 +3,7 @@ import sys
 
 import pandas as pd
 import streamlit as st
+import plotly.express as px
 
 
 # --------------------------------------------------
@@ -13,7 +14,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 sys.path.append(str(PROJECT_ROOT))
 
-from src.league_table import create_league_table
+from src.league_table import create_league_table, create_team_progress
 
 
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "matches.csv"
@@ -400,3 +401,85 @@ if selected_team != "Wszystkie drużyny" and team_in_season:
         hide_index=True,
         width="stretch",
     )
+
+# --------------------------------------------------
+# Pozycja w tabeli po kolejnych meczach
+# --------------------------------------------------
+
+if selected_team != "Wszystkie drużyny" and team_in_season:
+
+    st.subheader(f"Pozycja w tabeli — {selected_team}")
+
+    progress = create_team_progress(
+        df,
+        selected_season,
+        selected_team
+    )
+
+    if not progress.empty:
+
+        progress["date_label"] = (
+            progress["date"].dt.strftime("%d.%m.%Y")
+        )
+
+        fig = px.line(
+            progress,
+            x="match_number",
+            y="position",
+            markers=True,
+            custom_data=[
+                "cumulative_points",
+                "opponent",
+                "score",
+                "venue",
+                "result",
+                "date_label",
+            ],
+            labels={
+                "match_number": "Rozegrany mecz",
+                "position": "Miejsce w tabeli",
+            },
+        )
+
+        fig.update_traces(
+            mode="lines+markers+text",
+            text=progress["position"],
+            textposition="top center",
+            texttemplate="%{text}",
+            hovertemplate=(
+                "<b>Mecz %{x}</b><br>"
+                "Miejsce: %{y}<br>"
+                "Punkty: %{customdata[0]}<br>"
+                "Rywal: %{customdata[1]}<br>"
+                "Wynik: %{customdata[2]}<br>"
+                "Miejsce meczu: %{customdata[3]}<br>"
+                "Rezultat: %{customdata[4]}<br>"
+                "Data: %{customdata[5]}"
+                "<extra></extra>"
+            )
+        )
+
+        fig.update_xaxes(
+            dtick=1
+        )
+
+        number_of_teams = len(season_teams)
+        
+        fig.update_yaxes(
+            title="Miejsce w tabeli",
+            tickmode="linear",
+            tick0=1,
+            dtick=1,
+            range=[number_of_teams + 0.5, 0]
+        )
+
+        st.plotly_chart(
+            fig,
+            width="stretch"
+        )
+
+        st.caption(
+            "Pozycja jest obliczana po kolejnych rozegranych meczach drużyny. "
+            "Oś X nie oznacza oficjalnych kolejek, ponieważ źródłowy zbiór danych "
+            "nie zawiera numerów kolejek."
+        )
