@@ -143,55 +143,99 @@ if selected_team == "Wszystkie drużyny":
         + season_df["away_goals"].sum()
     )
 
+    goals_per_match = (
+        total_goals / matches
+        if matches > 0
+        else 0
+    )
+
+    col1, col2, col3 = st.columns(3)
+
+    col1.metric(
+        "Mecze",
+        matches
+    )
+
+    col2.metric(
+        "Gole",
+        int(total_goals)
+    )
+
+    col3.metric(
+        "Gole / mecz",
+        f"{goals_per_match:.2f}"
+    )
+
 else:
 
-    # Mecze wybranej drużyny
-    team_matches = season_df[
-        (season_df["home_team"] == selected_team) |
-        (season_df["away_team"] == selected_team)
-    ].copy()
+    # Statystyki wybranej drużyny pobieramy z tabeli ligowej
+    team_table = create_league_table(
+        df,
+        selected_season
+    )
 
-    matches = len(team_matches)
+    team_stats = team_table[
+        team_table["team"] == selected_team
+    ]
 
-    # Gole zdobyte przez wybraną drużynę
-    home_goals = team_matches.loc[
-        team_matches["home_team"] == selected_team,
-        "home_goals"
-    ].sum()
+    if not team_stats.empty:
 
-    away_goals = team_matches.loc[
-        team_matches["away_team"] == selected_team,
-        "away_goals"
-    ].sum()
+        team_stats = team_stats.iloc[0]
 
-    total_goals = home_goals + away_goals
+        matches = int(team_stats["matches"])
+        wins = int(team_stats["wins"])
+        draws = int(team_stats["draws"])
+        losses = int(team_stats["losses"])
+        goals_for = int(team_stats["goals_for"])
+        goals_against = int(team_stats["goals_against"])
+        goal_difference = int(team_stats["goal_difference"])
+        points = int(team_stats["points"])
 
+        goals_per_match = (
+            goals_for / matches
+            if matches > 0
+            else 0
+        )
 
-goals_per_match = (
-    total_goals / matches
-    if matches > 0
-    else 0
-)
+        col1, col2, col3 = st.columns(3)
 
+        col1.metric(
+            "Mecze",
+            matches
+        )
 
-col1, col2, col3 = st.columns(3)
+        col2.metric(
+            "Punkty",
+            points
+        )
 
-col1.metric(
-    "Mecze",
-    matches
-)
+        col3.metric(
+            "W / R / P",
+            f"{wins} / {draws} / {losses}"
+        )
 
-col2.metric(
-    "Gole",
-    int(total_goals)
-)
+        col4, col5, col6 = st.columns(3)
 
-col3.metric(
-    "Gole / mecz",
-    f"{goals_per_match:.2f}"
-)
+        col4.metric(
+            "Gole",
+            f"{goals_for}:{goals_against}"
+        )
 
+        col5.metric(
+            "Bilans bramek",
+            f"{goal_difference:+d}"
+        )
 
+        col6.metric(
+            "Gole / mecz",
+            f"{goals_per_match:.2f}"
+        )
+
+    else:
+
+        st.info(
+            "Brak statystyk drużyny dla wybranego sezonu."
+        )
 # --------------------------------------------------
 # Tabela ligowa
 # --------------------------------------------------
