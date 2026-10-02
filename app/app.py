@@ -86,31 +86,31 @@ season_teams = sorted(
     set(season_df["away_team"])
 )
 
-# Zapamiętujemy wybraną drużynę pomiędzy zmianami sezonu
-if "selected_team" not in st.session_state:
-    st.session_state.selected_team = "Wszystkie drużyny"
+# Pierwsze uruchomienie aplikacji
+if "team_select" not in st.session_state:
+    st.session_state.team_select = "Wszystkie drużyny"
 
-previous_team = st.session_state.selected_team
+# Aktualnie zapamiętana drużyna
+previous_team = st.session_state.team_select
 
-# Standardowo pokazujemy tylko drużyny z wybranego sezonu
+# Standardowo dropdown zawiera tylko drużyny
+# występujące w wybranym sezonie
 team_options = ["Wszystkie drużyny"] + season_teams
 
-# Jeżeli wcześniej wybrana drużyna nie grała w nowym sezonie,
-# tymczasowo zostawiamy ją na liście
+# Jeśli wcześniej wybrana drużyna nie grała w tym sezonie,
+# tymczasowo zostawiamy ją jako dodatkową opcję
 if (
     previous_team != "Wszystkie drużyny"
     and previous_team not in season_teams
 ):
     team_options.insert(1, previous_team)
 
+# Selectbox sam przechowuje swój stan
 selected_team = st.selectbox(
     "Wybierz drużynę",
     team_options,
-    index=team_options.index(previous_team),
+    key="team_select",
 )
-
-# Zapamiętujemy aktualny wybór
-st.session_state.selected_team = selected_team
 
 # Sprawdzamy, czy wybrana drużyna grała w danym sezonie
 team_in_season = (
@@ -133,12 +133,39 @@ if (
 # KPI
 # --------------------------------------------------
 
-matches = len(season_df)
+if selected_team == "Wszystkie drużyny":
 
-total_goals = (
-    season_df["home_goals"].sum()
-    + season_df["away_goals"].sum()
-)
+    # Statystyki całej ligi
+    matches = len(season_df)
+
+    total_goals = (
+        season_df["home_goals"].sum()
+        + season_df["away_goals"].sum()
+    )
+
+else:
+
+    # Mecze wybranej drużyny
+    team_matches = season_df[
+        (season_df["home_team"] == selected_team) |
+        (season_df["away_team"] == selected_team)
+    ].copy()
+
+    matches = len(team_matches)
+
+    # Gole zdobyte przez wybraną drużynę
+    home_goals = team_matches.loc[
+        team_matches["home_team"] == selected_team,
+        "home_goals"
+    ].sum()
+
+    away_goals = team_matches.loc[
+        team_matches["away_team"] == selected_team,
+        "away_goals"
+    ].sum()
+
+    total_goals = home_goals + away_goals
+
 
 goals_per_match = (
     total_goals / matches
