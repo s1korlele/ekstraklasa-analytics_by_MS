@@ -4,6 +4,7 @@ import sys
 import pandas as pd
 import streamlit as st
 import plotly.express as px
+import psycopg
 
 
 # --------------------------------------------------
@@ -47,7 +48,7 @@ def load_data():
         df = load_matches_from_db()
         data_source = "PostgreSQL"
 
-    except Exception:
+    except psycopg.Error:
         data_path = PROJECT_ROOT / "data" / "processed" / "matches.csv"
 
         df = pd.read_csv(data_path)
@@ -71,6 +72,7 @@ st.caption(
     "Interaktywny dashboard wyników i statystyk "
     "polskiej Ekstraklasy."
 )
+
 st.caption(f"Źródło danych aplikacji: {data_source}")
 
 
@@ -92,6 +94,7 @@ selected_season = st.selectbox(
 season_df = df[
     df["season"] == selected_season
 ].copy()
+
 
 # --------------------------------------------------
 # Wybór drużyny
@@ -145,6 +148,7 @@ if (
         f"Możesz wybrać inny sezon albo drużynę "
         f"występującą w tym sezonie."
     )
+
 
 # --------------------------------------------------
 # KPI
@@ -253,6 +257,8 @@ else:
         st.info(
             "Brak statystyk drużyny dla wybranego sezonu."
         )
+
+
 # --------------------------------------------------
 # Tabela ligowa
 # --------------------------------------------------
@@ -263,11 +269,6 @@ league_table = create_league_table(
     df,
     selected_season
 )
-
-if selected_team != "Wszystkie drużyny":
-    league_table = league_table[
-        league_table["team"] == selected_team
-    ]
 
 display_table = league_table[
     [
@@ -299,11 +300,30 @@ display_table.columns = [
 ]
 
 
+# Podświetlenie wybranej drużyny w pełnej tabeli ligowej
+def highlight_selected_team(row):
+
+    if (
+        selected_team != "Wszystkie drużyny"
+        and row["Drużyna"] == selected_team
+    ):
+        return [
+            "background-color: rgba(255, 215, 0, 0.25); "
+            "font-weight: bold"
+        ] * len(row)
+
+    return [""] * len(row)
+
+
 st.dataframe(
-    display_table,
+    display_table.style.apply(
+        highlight_selected_team,
+        axis=1
+    ),
     hide_index=True,
     width="stretch",
 )
+
 
 # --------------------------------------------------
 # Ostatnie 5 meczów wybranej drużyny
@@ -418,6 +438,7 @@ if selected_team != "Wszystkie drużyny" and team_in_season:
         width="stretch",
     )
 
+
 # --------------------------------------------------
 # Pozycja w tabeli po kolejnych meczach
 # --------------------------------------------------
@@ -480,7 +501,7 @@ if selected_team != "Wszystkie drużyny" and team_in_season:
         )
 
         number_of_teams = len(season_teams)
-        
+
         fig.update_yaxes(
             title="Miejsce w tabeli",
             tickmode="linear",
@@ -495,7 +516,8 @@ if selected_team != "Wszystkie drużyny" and team_in_season:
         )
 
         st.caption(
-            "Pozycja jest obliczana po kolejnych rozegranych meczach drużyny. "
-            "Oś X nie oznacza oficjalnych kolejek, ponieważ źródłowy zbiór danych "
-            "nie zawiera numerów kolejek."
+            "Każdy punkt przedstawia pozycję drużyny w tabeli na koniec dnia, "
+            "w którym rozegrała kolejny mecz. Oś X oznacza kolejny rozegrany mecz, "
+            "a nie oficjalną kolejkę, ponieważ źródłowy zbiór danych nie zawiera "
+            "numerów kolejek."
         )
