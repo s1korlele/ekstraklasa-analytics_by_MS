@@ -11,8 +11,8 @@ def create_base_table(season_df, all_teams=None):
 
     if all_teams is None:
         teams = sorted(
-            set(season_df["home_team"]) |
-            set(season_df["away_team"])
+            set(season_df["home_team"])
+            | set(season_df["away_team"])
         )
     else:
         teams = sorted(all_teams)
@@ -112,13 +112,14 @@ def create_h2h_table(season_df, teams):
 
     return pd.DataFrame(records)
 
+
 def h2h_matches_complete(season_df, teams):
     """
-    Sprawdza, czy wszystkie zainteresowane drużyny
-    rozegrały między sobą komplet spotkań.
+    Sprawdza, czy wszystkie drużyny z równą liczbą punktów
+    rozegrały między sobą komplet bezpośrednich spotkań.
 
-    W obecnym formacie Ekstraklasy każda para
-    powinna rozegrać 2 mecze.
+    W obecnym formacie Ekstraklasy każda para drużyn
+    powinna rozegrać dwa mecze: mecz i rewanż.
     """
 
     for i, team_a in enumerate(teams):
@@ -141,15 +142,21 @@ def h2h_matches_complete(season_df, teams):
 
     return True
 
+
 def sort_tied_group(group, season_df):
     """
-    Rozstrzyga kolejność drużyn mających
-    identyczną liczbę punktów.
+    Rozstrzyga kolejność drużyn mających identyczną
+    liczbę punktów.
+
+    Jeżeli zainteresowane drużyny rozegrały między sobą
+    komplet bezpośrednich spotkań, stosowana jest mini-tabela H2H.
+
+    Jeżeli komplet bezpośrednich spotkań nie został jeszcze
+    rozegrany, H2H jest pomijane i stosowane są kryteria ogólne.
     """
 
     teams = group["team"].tolist()
 
-    # H2H stosujemy tylko wtedy, gdy wszystkie zainteresowane drużyny rozegrały między sobą komplet zaplanowanych spotkań.
     use_h2h = h2h_matches_complete(
         season_df,
         teams
@@ -191,8 +198,6 @@ def sort_tied_group(group, season_df):
 
     else:
 
-        # Nie rozegrano kompletu bezpośrednich spotkań.
-        # Pomijamy H2H.
         sort_columns = [
             "goal_difference",
             "goals_for",
@@ -207,6 +212,17 @@ def sort_tied_group(group, season_df):
 
 
 def create_league_table(df, season, all_teams=None):
+    """
+    Tworzy tabelę ligową dla wskazanego sezonu.
+
+    Drużyny są najpierw grupowane według liczby punktów.
+    W przypadku remisu punktowego kolejność ustalana jest
+    przez sort_tied_group().
+
+    Dzięki temu H2H może zostać zastosowane również
+    w trakcie sezonu, jeżeli zainteresowane drużyny
+    rozegrały już komplet bezpośrednich spotkań.
+    """
 
     season_df = df[
         df["season"] == season
@@ -217,14 +233,9 @@ def create_league_table(df, season, all_teams=None):
         all_teams=all_teams
     )
 
-    season_complete = (
-    len(table) == 18
-    and table["matches"].eq(34).all()
-)
-
     sorted_groups = []
 
-    # Najpierw punkty całego sezonu.
+    # Najpierw grupujemy drużyny według liczby punktów.
     # Każdą grupę z równą liczbą punktów rozstrzygamy osobno.
     for points in sorted(
         table["points"].unique(),
@@ -235,27 +246,10 @@ def create_league_table(df, season, all_teams=None):
         ].copy()
 
         if len(group) > 1:
-
-            if season_complete:
-                # Zakończony sezon:
-                # stosujemy bezpośrednie mecze (H2H)
-                group = sort_tied_group(
-                    group,
-                    season_df
-                )
-
-            else:
-                # Sezon w trakcie:
-                # najpierw ogólny bilans bramek
-                group = group.sort_values(
-                    by=[
-                        "goal_difference",
-                        "goals_for",
-                        "wins",
-                        "away_wins",
-                    ],
-                    ascending=False
-                )
+            group = sort_tied_group(
+                group,
+                season_df
+            )
 
         sorted_groups.append(group)
 
@@ -270,7 +264,8 @@ def create_league_table(df, season, all_teams=None):
         range(1, len(table) + 1)
     )
 
-    # Kolumny techniczne H2H nie są potrzebne w finalnej tabeli.
+    # Kolumny techniczne H2H nie są potrzebne
+    # w finalnej tabeli prezentowanej użytkownikowi.
     h2h_columns = [
         "h2h_points",
         "h2h_goal_difference",
@@ -287,9 +282,13 @@ def create_league_table(df, season, all_teams=None):
 
     return table
 
+
 def create_team_progress(df, season, team):
     """
     Tworzy historię pozycji drużyny po każdym jej rozegranym meczu.
+
+    Pozycja przedstawia stan tabeli na koniec dnia,
+    w którym drużyna rozegrała dane spotkanie.
     """
 
     season_df = df[
@@ -297,8 +296,8 @@ def create_team_progress(df, season, team):
     ].copy()
 
     all_teams = sorted(
-        set(season_df["home_team"]) |
-        set(season_df["away_team"])
+        set(season_df["home_team"])
+        | set(season_df["away_team"])
     )
 
     team_matches = season_df[
@@ -316,13 +315,14 @@ def create_team_progress(df, season, team):
         team_matches.iterrows(),
         start=1
     ):
+
         # Wszystkie mecze ligi rozegrane do dnia
-        # danego spotkania włącznie
+        # danego spotkania włącznie.
         matches_so_far = season_df[
             season_df["date"] <= match["date"]
         ].copy()
 
-        # Tabela ligowa w danym momencie sezonu
+        # Tabela ligowa na koniec danego dnia.
         table = create_league_table(
             matches_so_far,
             season,
@@ -338,7 +338,7 @@ def create_team_progress(df, season, team):
 
         team_row = team_row.iloc[0]
 
-        # Informacje o konkretnym meczu
+        # Informacje o konkretnym meczu.
         if match["home_team"] == team:
             opponent = match["away_team"]
             venue = "Dom"
