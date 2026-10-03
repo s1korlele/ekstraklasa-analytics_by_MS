@@ -15,6 +15,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.append(str(PROJECT_ROOT))
 
 from src.league_table import create_league_table, create_team_progress
+from src.database import load_matches_from_db
 
 
 DATA_PATH = PROJECT_ROOT / "data" / "processed" / "matches.csv"
@@ -37,13 +38,27 @@ st.set_page_config(
 
 @st.cache_data
 def load_data():
-    df = pd.read_csv(DATA_PATH)
-    df["date"] = pd.to_datetime(df["date"])
+    """
+    Pobiera dane z PostgreSQL.
+    Jeśli baza jest niedostępna, używa lokalnego pliku CSV.
+    """
 
-    return df
+    try:
+        df = load_matches_from_db()
+        data_source = "PostgreSQL"
+
+    except Exception:
+        data_path = PROJECT_ROOT / "data" / "processed" / "matches.csv"
+
+        df = pd.read_csv(data_path)
+        df["date"] = pd.to_datetime(df["date"])
+
+        data_source = "CSV"
+
+    return df, data_source
 
 
-df = load_data()
+df, data_source = load_data()
 
 
 # --------------------------------------------------
@@ -56,6 +71,7 @@ st.caption(
     "Interaktywny dashboard wyników i statystyk "
     "polskiej Ekstraklasy."
 )
+st.caption(f"Źródło danych aplikacji: {data_source}")
 
 
 # --------------------------------------------------
